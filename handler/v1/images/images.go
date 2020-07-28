@@ -2,11 +2,16 @@ package images
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"strings"
+	"sync"
 
 	"github.com/imager/model"
 	"github.com/imager/uploader"
@@ -32,33 +37,36 @@ func (s *Service) Resize(w http.ResponseWriter, r *http.Request) {
 			return []byte(fmt.Sprintf("error decoding file into image: %v", err)),
 				http.StatusBadRequest
 		}
-		img, err := imaging.Decode(file)
+		defer file.Close()
+
+		oldImgBytes, err := ioutil.ReadAll(file)
 		if err != nil {
-			return []byte(fmt.Sprintf("error decoding file into image: %v", err)),
+			return []byte(fmt.Sprintf("error reading file %s with error: %v", h.Filename, err)),
+				http.StatusBadRequest
+		}
+
+		img, err := imaging.Decode(bytes.NewReader(oldImgBytes))
+		if err != nil {
+			return []byte(fmt.Sprintf("error decoding file %s into image: %v", h.Filename, err)),
 				http.StatusInternalServerError
 		}
 
 		// TODO: resize image using query vars
 		img = imaging.Resize(img, 128, 128, imaging.NearestNeighbor)
+		imgFormat := imaging.PNG
 
 		buf := new(bytes.Buffer)
-		if err := imaging.Encode(buf, img, imaging.PNG); err != nil {
+		if err := imaging.Encode(buf, img, imgFormat); err != nil {
 			return []byte(fmt.Sprintf("error encoding file to buffer: %v", err)),
 				http.StatusInternalServerError
 		}
-		downloadURL, err := s.uploader.Upload(h.Filename, buf)
+
+		newImgBytes := buf.Bytes()
+
+		res, err := s.uploadImages([2][]byte{oldImgBytes, newImgBytes})
 		if err != nil {
-			return []byte(fmt.Sprintf("error uploading image: %v", err)),
+			return []byte(fmt.Sprintf("error uploading images: %v", err)),
 				http.StatusInternalServerError
-		}
-
-		// TODO: store image inside DB with provided URL
-		_ = downloadURL
-
-		// TODO: provide this variable with appropriate values
-		res := model.OriginalResized{
-			Original: model.Image{},
-			Resized:  model.Image{},
 		}
 
 		b, err := json.Marshal(res)
@@ -71,6 +79,62 @@ func (s *Service) Resize(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Conent-Type", "application/json")
 	w.WriteHeader(statusCode)
 	w.Write(data)
+}
+
+func calcualteMD5(r io.Reader) (string, error) {
+	h := md5.New()
+	if _, err := io.Copy(h, r); err != nil {
+		if err != nil {
+			return "", fmt.Errorf("calculating md5 was failed with error: %v", err)
+		}
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+func (s *Service) uploadImages(images [2][]byte) (model.OriginalResized, error) {
+	var res model.OriginalResized
+	wg := sync.WaitGroup{}
+	wg.Add(len(images))
+	errCh := make(chan error, len(images))
+
+	go func() {
+		defer wg.Done()
+		hash, err := calcualteMD5(bytes.NewBuffer(images[0]))
+		if err != nil {
+			errCh <- err
+			return
+		}
+		res.Original.DownloadURL, err = s.uploader.Upload(
+			fmt.Sprintf("%s.%s", hash, strings.ToLower(imaging.PNG.String())),
+			bytes.NewBuffer(images[0]),
+		)
+		errCh <- err
+	}()
+
+	go func() {
+		defer wg.Done()
+		hash, err := calcualteMD5(bytes.NewBuffer(images[1]))
+		if err != nil {
+			errCh <- err
+			return
+		}
+		res.Resized.DownloadURL, err = s.uploader.Upload(
+			fmt.Sprintf("%s.%s", hash, strings.ToLower(imaging.PNG.String())),
+			bytes.NewBuffer(images[1]),
+		)
+		errCh <- err
+	}()
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			return model.OriginalResized{}, err
+		}
+	}
+
+	return res, nil
 }
 
 func (s *Service) OnlyResized(w http.ResponseWriter, r *http.Request) {}
