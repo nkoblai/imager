@@ -2,7 +2,7 @@ package model
 
 type OriginalResized struct {
 	Original Image
-	Resized  []Image
+	Resized  Image
 }
 
 type Image struct {

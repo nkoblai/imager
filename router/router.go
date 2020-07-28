@@ -4,11 +4,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/imager/handler/v1/images"
 	"github.com/imager/model"
+	"github.com/imager/uploader"
 )
 
-func New(imgRepo model.ImagesRepository) *mux.Router {
+func New(imgRepo model.ImagesRepository, uploadSvc uploader.Service) *mux.Router {
 	router := mux.NewRouter()
-	imgSvcV1 := images.NewService(imgRepo)
+	imgSvcV1 := images.NewService(imgRepo, uploadSvc)
 
 	apiV1 := router.PathPrefix("/api/v1").Subrouter()
 
