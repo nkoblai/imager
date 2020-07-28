@@ -18,10 +18,10 @@ func (r Repo) Save(i model.Image) (int, error) {
 	return 0, nil
 }
 
-func (r Repo) All() ([]model.Image, error) {
+func (r Repo) All() ([]model.OriginalResized, error) {
 	return nil, nil
 }
 
-func (r Repo) AllResized() ([]model.Image, error) {
+func (r Repo) OnlyResized() ([]model.Image, error) {
 	return nil, nil
 }

@@ -14,5 +14,5 @@ type Image struct {
 type ImagesRepository interface {
 	Save(Image) (int, error)
 	All() ([]OriginalResized, error)
-	AllResized() ([]Image, error)
+	OnlyResized() ([]Image, error)
 }
