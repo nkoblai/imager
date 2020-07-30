@@ -20,9 +20,10 @@ func New(s3manager *s3manager.Uploader) Service {
 }
 
 func (s *impl) Upload(fileName string, r io.Reader) (string, error) {
-
-	bucketName := "try-imager"
-	aclPerm := "public-read"
+	var (
+		bucketName = "try-imager"
+		aclPerm    = "public-read"
+	)
 
 	result, err := s.s3manager.Upload(&s3manager.UploadInput{
 		Bucket: &bucketName,

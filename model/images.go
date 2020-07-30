@@ -9,6 +9,7 @@ type Image struct {
 	ID          int
 	DownloadURL string
 	Resolution  string
+	OriginalID  int `json:",omitempty"`
 }
 
 type ImagesRepository interface {
