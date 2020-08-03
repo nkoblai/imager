@@ -21,6 +21,9 @@ func New(s3manager *s3manager.Uploader) Service {
 }
 
 func (s *impl) Upload(ctx context.Context, fileName string, r io.Reader) (string, error) {
+
+	// TODO: add possibility to create new bucket if such doesn't exist
+
 	var (
 		bucketName = "try-imager"
 		aclPerm    = "public-read"

@@ -1,4 +1,4 @@
-package images
+package handler
 
 import (
 	"bytes"
@@ -9,12 +9,15 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/gorilla/mux"
 	"github.com/imager/model"
-	"github.com/imager/uploader"
+	"github.com/imager/web/downloader"
+	"github.com/imager/web/uploader"
 
 	"github.com/disintegration/imaging"
 )
@@ -22,12 +25,13 @@ import (
 const imgFormat = imaging.PNG
 
 type Service struct {
-	repo     model.ImagesRepository
-	uploader uploader.Service
+	repo       model.ImagesRepository
+	uploader   uploader.Service
+	downloader downloader.Service
 }
 
-func NewService(repo model.ImagesRepository, uploader uploader.Service) *Service {
-	return &Service{repo: repo, uploader: uploader}
+func NewService(repo model.ImagesRepository, uploader uploader.Service, downloader downloader.Service) *Service {
+	return &Service{repo: repo, uploader: uploader, downloader: downloader}
 }
 
 func (s *Service) All(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +49,99 @@ func (s *Service) All(w http.ResponseWriter, r *http.Request) {
 		}
 		return res, http.StatusOK
 	}()
+	response(w, data, statusCode)
+}
+
+func (s *Service) ResizeByID(w http.ResponseWriter, r *http.Request) {
+	data, statusCode := func(w http.ResponseWriter, r *http.Request) ([]byte, int) {
+		ctx := r.Context()
+		weight, height, err := validateSizeParams(r)
+		if err != nil {
+			return []byte(fmt.Sprintf("error validating resize params: %v", err)),
+				http.StatusBadRequest
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			return []byte(fmt.Sprintf("error converting id to int: %v", err)),
+				http.StatusBadRequest
+		}
+		originalImage, err := s.repo.GetOne(ctx, id)
+		if err != nil {
+			return []byte(fmt.Sprintf("couldn't get image by id: %d with error: %v", id, err)),
+				http.StatusBadRequest
+		}
+
+		originalImageName := path.Base(originalImage.DownloadURL)
+
+		body, err := s.downloader.Download(ctx, originalImage.DownloadURL)
+		if err != nil {
+			return []byte(fmt.Sprintf("couldn't download image by url: %s with error: %v", originalImageName, err)),
+				http.StatusInternalServerError
+		}
+
+		newImageResolution := fmt.Sprintf("%dx%d", weight, height)
+
+		oldImgBytes, err := ioutil.ReadAll(body)
+		if err != nil {
+			return []byte(fmt.Sprintf("error reading file %s with error: %v", originalImageName, err)),
+				http.StatusBadRequest
+		}
+
+		img, err := imaging.Decode(bytes.NewReader(oldImgBytes))
+		if err != nil {
+			return []byte(fmt.Sprintf("error decoding file %s into image: %v", originalImageName, err)),
+				http.StatusInternalServerError
+		}
+
+		img = imaging.Resize(img, weight, height, imaging.NearestNeighbor)
+		if img == nil {
+			return []byte(fmt.Sprintf("couldn't resize image '%s'", originalImageName)),
+				http.StatusInternalServerError
+		}
+
+		buf := new(bytes.Buffer)
+		if err := imaging.Encode(buf, img, imgFormat); err != nil {
+			return []byte(fmt.Sprintf("error encoding file %s to buffer: %v", originalImageName, err)),
+				http.StatusInternalServerError
+		}
+
+		hash, err := calcualteMD5(bytes.NewBuffer(buf.Bytes()))
+		if err != nil {
+			return []byte(fmt.Sprintf("error calculating md5 for image %v", err)),
+				http.StatusInternalServerError
+		}
+
+		downloadURL, err := s.uploader.Upload(ctx, name(hash), buf)
+		if err != nil {
+			return []byte(fmt.Sprintf("error downloading image %v", err)),
+				http.StatusInternalServerError
+		}
+
+		newImage := model.Image{
+			DownloadURL: downloadURL,
+			Resolution:  newImageResolution,
+			OriginalID:  originalImage.ID,
+		}
+
+		id, err = s.repo.Save(ctx, newImage)
+		if err != nil {
+			return []byte(err.Error()),
+				http.StatusInternalServerError
+		}
+		newImage.ID = id
+
+		res := model.OriginalResized{
+			Original: originalImage,
+			Resized:  newImage,
+		}
+
+		b, err := json.Marshal(res)
+		if err != nil {
+			return []byte(fmt.Sprintf("error marshaling result: %v", err)),
+				http.StatusInternalServerError
+		}
+		return b, http.StatusCreated
+	}(w, r)
 	response(w, data, statusCode)
 }
 

@@ -18,8 +18,8 @@ const (
 	 B.resolution AS resized_resolution 
 	 FROM images A, images B WHERE A.id = B.original_id`
 
-	onlyResizedImagesQuery = "SELECT id, download_url, resolution FROM images WHERE original_id IS NOT NULL"
-
+	onlyResizedImagesQuery           = "SELECT id, download_url, resolution FROM images WHERE original_id IS NOT NULL"
+	oneByID                          = "SELECT id, download_url, resolution FROM images WHERE id = $1"
 	insertImageWithReferenceQuery    = "INSERT INTO images (download_url, resolution, original_id) VALUES ($1, $2, $3) RETURNING id"
 	insertImageWithoutReferenceQuery = "INSERT INTO images (download_url, resolution) VALUES ($1, $2) RETURNING id"
 )
@@ -32,7 +32,7 @@ func NewRepo(db *sql.DB) *Repo {
 	return &Repo{db}
 }
 
-func (r Repo) Save(ctx context.Context, img model.Image) (int, error) {
+func (r *Repo) Save(ctx context.Context, img model.Image) (int, error) {
 	const errMsg = "inserting of '%v' to db failed with error: %v"
 	var id int
 	if img.OriginalID != 0 {
@@ -47,7 +47,7 @@ func (r Repo) Save(ctx context.Context, img model.Image) (int, error) {
 	return id, nil
 }
 
-func (r Repo) All(ctx context.Context) ([]model.OriginalResized, error) {
+func (r *Repo) All(ctx context.Context) ([]model.OriginalResized, error) {
 	const errMsg = "error getting all images from DB: %v"
 	rows, err := r.db.QueryContext(ctx, allImagesQuery)
 	if err != nil {
@@ -73,7 +73,7 @@ func (r Repo) All(ctx context.Context) ([]model.OriginalResized, error) {
 	return res, nil
 }
 
-func (r Repo) OnlyResized(ctx context.Context) ([]model.Image, error) {
+func (r *Repo) OnlyResized(ctx context.Context) ([]model.Image, error) {
 	const errMsg = "error getting only resized images from DB: %v"
 	rows, err := r.db.QueryContext(ctx, onlyResizedImagesQuery)
 	if err != nil {
@@ -94,4 +94,12 @@ func (r Repo) OnlyResized(ctx context.Context) ([]model.Image, error) {
 		res = append(res, image)
 	}
 	return res, nil
+}
+
+func (r *Repo) GetOne(ctx context.Context, id int) (model.Image, error) {
+	var image model.Image
+	if err := r.db.QueryRowContext(ctx, oneByID, id).Scan(&image.ID, &image.DownloadURL, &image.Resolution); err != nil {
+		return model.Image{}, fmt.Errorf("error getting image by ID: %d, error: %v", id, err)
+	}
+	return image, nil
 }

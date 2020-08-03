@@ -18,4 +18,5 @@ type ImagesRepository interface {
 	Save(context.Context, Image) (int, error)
 	All(context.Context) ([]OriginalResized, error)
 	OnlyResized(context.Context) ([]Image, error)
+	GetOne(context.Context, int) (Image, error)
 }
