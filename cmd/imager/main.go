@@ -9,7 +9,6 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/imager/repository/images"
@@ -19,37 +18,34 @@ import (
 )
 
 func main() {
-
-	// TODO: make it configurable using env vars
-	// optional: can be moved to another package
-	const (
-		host     = "localhost"
-		port     = 5432
-		user     = "postgres"
-		password = "123"
-		dbname   = "imager"
-	)
-
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-		"password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
-
-	db, err := sql.Open("postgres", psqlInfo)
+	db, err := createDBsession()
 	if err != nil {
 		log.Fatalf("error creating db connection: %v\n", err)
-		os.Exit(1)
 	}
 	defer db.Close()
 
-	// TODO: add possibility to define region using env vars
-	session, err := session.NewSession(&aws.Config{Region: aws.String("eu-central-1")})
+	session, err := session.NewSession()
 	if err != nil {
-		panic(err)
+		log.Fatalf("error creating aws session: %v\n", err)
 	}
 
 	s3uploader := s3manager.NewUploader(session)
 
 	if err := http.ListenAndServe(":8080", router.New(images.NewRepo(db), uploader.New(s3uploader), downloader.New())); err != nil {
-		panic(err)
+		log.Fatalf("error running server: %v\n", err)
 	}
+}
+
+func createDBsession() (*sql.DB, error) {
+	host := os.Getenv("PGHOST")
+	port := os.Getenv("PGPORT")
+	user := os.Getenv("PGUSER")
+	password := os.Getenv("PGPASSWORD")
+	dbname := os.Getenv("PGDBNAME")
+
+	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s "+
+		"password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+
+	return sql.Open("postgres", psqlInfo)
 }
