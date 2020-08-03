@@ -1,6 +1,7 @@
 package uploader
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -8,7 +9,7 @@ import (
 )
 
 type Service interface {
-	Upload(string, io.Reader) (string, error)
+	Upload(context.Context, string, io.Reader) (string, error)
 }
 
 type impl struct {
@@ -19,13 +20,13 @@ func New(s3manager *s3manager.Uploader) Service {
 	return &impl{s3manager}
 }
 
-func (s *impl) Upload(fileName string, r io.Reader) (string, error) {
+func (s *impl) Upload(ctx context.Context, fileName string, r io.Reader) (string, error) {
 	var (
 		bucketName = "try-imager"
 		aclPerm    = "public-read"
 	)
 
-	result, err := s.s3manager.Upload(&s3manager.UploadInput{
+	result, err := s.s3manager.UploadWithContext(ctx, &s3manager.UploadInput{
 		Bucket: &bucketName,
 		Key:    &fileName,
 		Body:   r,

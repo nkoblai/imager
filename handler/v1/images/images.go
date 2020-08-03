@@ -2,12 +2,14 @@ package images
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -16,6 +18,8 @@ import (
 
 	"github.com/disintegration/imaging"
 )
+
+const imgFormat = imaging.PNG
 
 type Service struct {
 	repo     model.ImagesRepository
@@ -28,7 +32,8 @@ func NewService(repo model.ImagesRepository, uploader uploader.Service) *Service
 
 func (s *Service) All(w http.ResponseWriter, r *http.Request) {
 	data, statusCode := func() ([]byte, int) {
-		images, err := s.repo.All()
+		ctx := r.Context()
+		images, err := s.repo.All(ctx)
 		if err != nil {
 			return []byte(fmt.Sprintf("error getting images from db: %v", err)),
 				http.StatusInternalServerError
@@ -45,7 +50,12 @@ func (s *Service) All(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) Resize(w http.ResponseWriter, r *http.Request) {
 	data, statusCode := func(w http.ResponseWriter, r *http.Request) ([]byte, int) {
-		// TODO: use context recieved from request for futher func calls
+		ctx := r.Context()
+		weight, height, err := validateSizeParams(r)
+		if err != nil {
+			return []byte(fmt.Sprintf("error validating resize params: %v", err)),
+				http.StatusBadRequest
+		}
 
 		file, h, err := r.FormFile("file")
 		if err != nil {
@@ -69,8 +79,11 @@ func (s *Service) Resize(w http.ResponseWriter, r *http.Request) {
 		originalImageResolution := fmt.Sprintf("%dx%d", img.Bounds().Dx(), img.Bounds().Dy())
 
 		// TODO: resize image using query vars
-		img = imaging.Resize(img, 128, 128, imaging.NearestNeighbor)
-		imgFormat := imaging.PNG
+		img = imaging.Resize(img, weight, height, imaging.NearestNeighbor)
+		if img == nil {
+			return []byte(fmt.Sprintf("couldn't resize image '%s'", h.Filename)),
+				http.StatusInternalServerError
+		}
 
 		buf := new(bytes.Buffer)
 		if err := imaging.Encode(buf, img, imgFormat); err != nil {
@@ -80,17 +93,16 @@ func (s *Service) Resize(w http.ResponseWriter, r *http.Request) {
 
 		newImgBytes := buf.Bytes()
 
-		res, err := s.uploadImages([2][]byte{oldImgBytes, newImgBytes}, imgFormat.String())
+		res, err := s.uploadImages(ctx, [2][]byte{oldImgBytes, newImgBytes})
 		if err != nil {
 			return []byte(fmt.Sprintf("error uploading images: %v", err)),
 				http.StatusInternalServerError
 		}
 
 		res.Original.Resolution = originalImageResolution
-		// TODO: use query vars
-		res.Resized.Resolution = fmt.Sprintf("%dx%d", 128, 128)
+		res.Resized.Resolution = fmt.Sprintf("%dx%d", weight, height)
 
-		originalID, err := s.repo.Save(res.Original)
+		originalID, err := s.repo.Save(ctx, res.Original)
 		if err != nil {
 			return []byte(err.Error()),
 				http.StatusInternalServerError
@@ -99,7 +111,7 @@ func (s *Service) Resize(w http.ResponseWriter, r *http.Request) {
 		res.Original.ID = originalID
 		res.Resized.OriginalID = originalID
 
-		resizedID, err := s.repo.Save(res.Resized)
+		resizedID, err := s.repo.Save(ctx, res.Resized)
 		if err != nil {
 			return []byte(err.Error()),
 				http.StatusInternalServerError
@@ -127,11 +139,11 @@ func calcualteMD5(r io.Reader) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-func name(hash string, format string) string {
-	return fmt.Sprintf("%s.%s", hash, strings.ToLower(format))
+func name(hash string) string {
+	return fmt.Sprintf("%s.%s", hash, strings.ToLower(imgFormat.String()))
 }
 
-func (s *Service) uploadImages(images [2][]byte, format string) (model.OriginalResized, error) {
+func (s *Service) uploadImages(ctx context.Context, images [2][]byte) (model.OriginalResized, error) {
 	var res model.OriginalResized
 	wg := sync.WaitGroup{}
 	wg.Add(len(images))
@@ -145,7 +157,8 @@ func (s *Service) uploadImages(images [2][]byte, format string) (model.OriginalR
 			return
 		}
 		res.Original.DownloadURL, err = s.uploader.Upload(
-			name(hash, format),
+			ctx,
+			name(hash),
 			bytes.NewBuffer(images[0]),
 		)
 		errCh <- err
@@ -159,7 +172,8 @@ func (s *Service) uploadImages(images [2][]byte, format string) (model.OriginalR
 			return
 		}
 		res.Resized.DownloadURL, err = s.uploader.Upload(
-			name(hash, format),
+			ctx,
+			name(hash),
 			bytes.NewBuffer(images[1]),
 		)
 		errCh <- err
@@ -179,7 +193,8 @@ func (s *Service) uploadImages(images [2][]byte, format string) (model.OriginalR
 
 func (s *Service) OnlyResized(w http.ResponseWriter, r *http.Request) {
 	data, statusCode := func() ([]byte, int) {
-		images, err := s.repo.OnlyResized()
+		ctx := r.Context()
+		images, err := s.repo.OnlyResized(ctx)
 		if err != nil {
 			return []byte(fmt.Sprintf("error getting resized images from db: %v", err)),
 				http.StatusInternalServerError
@@ -198,4 +213,23 @@ func response(w http.ResponseWriter, data []byte, statusCode int) {
 	w.Header().Add("Conent-Type", "application/json")
 	w.WriteHeader(statusCode)
 	w.Write(data)
+}
+
+func validateSizeParams(r *http.Request) (int, int, error) {
+	w, err := strconv.Atoi(r.URL.Query().Get("weight"))
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid weight param")
+	}
+	h, err := strconv.Atoi(r.URL.Query().Get("height"))
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid height param")
+	}
+	if w <= 0 || w > 3840 {
+		return 0, 0, fmt.Errorf("weight is not in range [0-3840]")
+	}
+
+	if h <= 0 || w > 2160 {
+		return 0, 0, fmt.Errorf("height is not in range [0-2160]")
+	}
+	return w, h, nil
 }

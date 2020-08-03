@@ -1,5 +1,7 @@
 package model
 
+import "context"
+
 type OriginalResized struct {
 	Original Image
 	Resized  Image
@@ -13,7 +15,7 @@ type Image struct {
 }
 
 type ImagesRepository interface {
-	Save(Image) (int, error)
-	All() ([]OriginalResized, error)
-	OnlyResized() ([]Image, error)
+	Save(context.Context, Image) (int, error)
+	All(context.Context) ([]OriginalResized, error)
+	OnlyResized(context.Context) ([]Image, error)
 }
