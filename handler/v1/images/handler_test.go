@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -19,6 +20,8 @@ import (
 	mock_uploader "github.com/imager/mock/uploader"
 	"github.com/imager/model"
 )
+
+const testFilePath = "./testdata/test.jpg"
 
 func TestAll(t *testing.T) {
 
@@ -82,10 +85,34 @@ func createRecorderAndRequest(id string, w, h int) (*http.Request, *httptest.Res
 	return r, wr, nil
 }
 
+func writeMultipartData(r *http.Request) (*http.Request, error) {
+	body := new(bytes.Buffer)
+	multipartWriter := multipart.NewWriter(body)
+	defer multipartWriter.Close()
+	w, err := multipartWriter.CreateFormFile("file", "test.jpg")
+	if err != nil {
+		return nil, err
+	}
+	b, err := ioutil.ReadFile(testFilePath)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := w.Write(b); err != nil {
+		return nil, err
+	}
+	r, err = http.NewRequest("POST", r.URL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+	r.Header.Add("Content-Type", multipartWriter.FormDataContentType())
+	return r, nil
+}
+
+func readImage() ([]byte, error) {
+	return ioutil.ReadFile(testFilePath)
+}
+
 func resizeTestImage(w, h int) (originalImage []byte, resizedImage *bytes.Buffer, err error) {
-
-	testFilePath := "./testdata/test.jpg"
-
 	b, err := ioutil.ReadFile(testFilePath)
 	if err != nil {
 		return nil, nil, err
@@ -101,6 +128,7 @@ func resizeTestImage(w, h int) (originalImage []byte, resizedImage *bytes.Buffer
 	}
 	return b, buf, nil
 }
+
 func TestResizeByID(t *testing.T) {
 
 	mockCtrl := gomock.NewController(t)
@@ -110,6 +138,18 @@ func TestResizeByID(t *testing.T) {
 		name               string
 		getTest            func() (*Service, *http.Request, *httptest.ResponseRecorder)
 		expectedStatusCode int
+	}
+
+	weight, height := 100, 100
+
+	b, buf, err := resizeTestImage(weight, height)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hash, err := calculateMD5(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	tcs := []tc{
@@ -127,7 +167,7 @@ func TestResizeByID(t *testing.T) {
 		{
 			name: "http.StatusBadRequest: invalid id",
 			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
-				r, wr, err := createRecorderAndRequest("", 100, 100)
+				r, wr, err := createRecorderAndRequest("", weight, height)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -138,7 +178,7 @@ func TestResizeByID(t *testing.T) {
 		{
 			name: "http.StatusInternalServerError: GetOne db error",
 			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
-				r, wr, err := createRecorderAndRequest("1", 100, 100)
+				r, wr, err := createRecorderAndRequest("1", weight, height)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -151,7 +191,7 @@ func TestResizeByID(t *testing.T) {
 		{
 			name: "http.StatusInternalServerError: Download error",
 			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
-				r, wr, err := createRecorderAndRequest("1", 100, 100)
+				r, wr, err := createRecorderAndRequest("1", weight, height)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -166,7 +206,7 @@ func TestResizeByID(t *testing.T) {
 		{
 			name: "http.StatusInternalServerError: decoding file error",
 			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
-				r, wr, err := createRecorderAndRequest("1", 100, 100)
+				r, wr, err := createRecorderAndRequest("1", weight, height)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -181,22 +221,13 @@ func TestResizeByID(t *testing.T) {
 		{
 			name: "http.StatusInternalServerError: upload file error",
 			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
-				w, h := 100, 100
-				r, wr, err := createRecorderAndRequest("1", w, h)
+				r, wr, err := createRecorderAndRequest("1", weight, height)
 				if err != nil {
 					t.Fatal(err)
 				}
 				imagesSvc := mock_model.NewMockImagesRepository(mockCtrl)
 				imagesSvc.EXPECT().GetOne(r.Context(), 1).Return(model.Image{}, nil)
 				downloadSvc := mock_downloader.NewMockService(mockCtrl)
-				b, buf, err := resizeTestImage(w, h)
-				if err != nil {
-					t.Fatal(err)
-				}
-				hash, err := calculateMD5(bytes.NewReader(buf.Bytes()))
-				if err != nil {
-					t.Fatal(err)
-				}
 				downloadSvc.EXPECT().Download(r.Context(), "").Return(b, nil)
 				uploadSvc := mock_uploader.NewMockService(mockCtrl)
 				uploadSvc.EXPECT().Upload(r.Context(), name(hash), buf).Return("", errors.New("error"))
@@ -207,26 +238,17 @@ func TestResizeByID(t *testing.T) {
 		{
 			name: "http.StatusInternalServerError: save file error",
 			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
-				w, h := 100, 100
-				r, wr, err := createRecorderAndRequest("1", w, h)
+				r, wr, err := createRecorderAndRequest("1", weight, height)
 				if err != nil {
 					t.Fatal(err)
 				}
 				imagesSvc := mock_model.NewMockImagesRepository(mockCtrl)
 				imagesSvc.EXPECT().GetOne(r.Context(), 1).Return(model.Image{}, nil)
 				downloadSvc := mock_downloader.NewMockService(mockCtrl)
-				b, buf, err := resizeTestImage(w, h)
-				if err != nil {
-					t.Fatal(err)
-				}
-				hash, err := calculateMD5(bytes.NewReader(buf.Bytes()))
-				if err != nil {
-					t.Fatal(err)
-				}
 				downloadSvc.EXPECT().Download(r.Context(), "").Return(b, nil)
 				uploadSvc := mock_uploader.NewMockService(mockCtrl)
 				uploadSvc.EXPECT().Upload(r.Context(), name(hash), buf).Return("", nil)
-				imagesSvc.EXPECT().Save(r.Context(), model.Image{Resolution: fmt.Sprintf("%dx%d", w, h)}).Return(0, errors.New("error"))
+				imagesSvc.EXPECT().Save(r.Context(), model.Image{Resolution: fmt.Sprintf("%dx%d", weight, height)}).Return(0, errors.New("error"))
 				return NewService(imagesSvc, uploadSvc, downloadSvc), r, wr
 			},
 			expectedStatusCode: http.StatusInternalServerError,
@@ -234,26 +256,17 @@ func TestResizeByID(t *testing.T) {
 		{
 			name: "http.StatusCreated",
 			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
-				w, h := 100, 100
-				r, wr, err := createRecorderAndRequest("1", w, h)
+				r, wr, err := createRecorderAndRequest("1", weight, height)
 				if err != nil {
 					t.Fatal(err)
 				}
 				imagesSvc := mock_model.NewMockImagesRepository(mockCtrl)
 				imagesSvc.EXPECT().GetOne(r.Context(), 1).Return(model.Image{}, nil)
 				downloadSvc := mock_downloader.NewMockService(mockCtrl)
-				b, buf, err := resizeTestImage(w, h)
-				if err != nil {
-					t.Fatal(err)
-				}
-				hash, err := calculateMD5(bytes.NewReader(buf.Bytes()))
-				if err != nil {
-					t.Fatal(err)
-				}
 				downloadSvc.EXPECT().Download(r.Context(), "").Return(b, nil)
 				uploadSvc := mock_uploader.NewMockService(mockCtrl)
 				uploadSvc.EXPECT().Upload(r.Context(), name(hash), buf).Return("", nil)
-				imagesSvc.EXPECT().Save(r.Context(), model.Image{Resolution: fmt.Sprintf("%dx%d", w, h)}).Return(1, nil)
+				imagesSvc.EXPECT().Save(r.Context(), model.Image{Resolution: fmt.Sprintf("%dx%d", weight, height)}).Return(1, nil)
 				return NewService(imagesSvc, uploadSvc, downloadSvc), r, wr
 			},
 			expectedStatusCode: http.StatusCreated,
@@ -264,6 +277,105 @@ func TestResizeByID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, r, wr := tc.getTest()
 			svc.ResizeByID(wr, r)
+			statusCode := wr.Result().StatusCode
+			if statusCode != tc.expectedStatusCode {
+				t.Fatalf("expected status code is: %d but got: %d", tc.expectedStatusCode, statusCode)
+			}
+		})
+	}
+}
+
+func TestResize(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	type tc struct {
+		name               string
+		getTest            func() (*Service, *http.Request, *httptest.ResponseRecorder)
+		expectedStatusCode int
+	}
+
+	weight, height := 100, 100
+
+	original, resized, err := resizeTestImage(weight, height)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hashOriginal, err := calculateMD5(bytes.NewBuffer(original))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hashResized, err := calculateMD5(bytes.NewBuffer(resized.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tcs := []tc{
+		{
+			name: "http.StatusBadRequest: invalid params",
+			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
+				r, wr, err := createRecorderAndRequest("1", 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return NewService(nil, nil, nil), r, wr
+			},
+			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
+			name: "http.StatusBadRequest: error decoding file",
+			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
+				r, wr, err := createRecorderAndRequest("1", 100, 100)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return NewService(nil, nil, nil), r, wr
+			},
+			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
+			name: "http.StatusInternalServerError: error uploading original file",
+			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
+				r, wr, err := createRecorderAndRequest("1", weight, height)
+				if err != nil {
+					t.Fatal(err)
+				}
+				r, err = writeMultipartData(r)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				uploadSvc := mock_uploader.NewMockService(mockCtrl)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashOriginal), bytes.NewBuffer(original)).Return("", errors.New("error"))
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashResized), bytes.NewBuffer(resized.Bytes())).Return("", nil)
+				return NewService(nil, uploadSvc, nil), r, wr
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+		{
+			name: "http.StatusInternalServerError: error uploading resized file",
+			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
+				r, wr, err := createRecorderAndRequest("1", weight, height)
+				if err != nil {
+					t.Fatal(err)
+				}
+				r, err = writeMultipartData(r)
+				if err != nil {
+					t.Fatal(err)
+				}
+				uploadSvc := mock_uploader.NewMockService(mockCtrl)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashOriginal), bytes.NewBuffer(original)).Return("", nil)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashResized), bytes.NewBuffer(resized.Bytes())).Return("", errors.New("error"))
+				return NewService(nil, uploadSvc, nil), r, wr
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, r, wr := tc.getTest()
+			svc.Resize(wr, r)
 			statusCode := wr.Result().StatusCode
 			if statusCode != tc.expectedStatusCode {
 				t.Fatalf("expected status code is: %d but got: %d", tc.expectedStatusCode, statusCode)

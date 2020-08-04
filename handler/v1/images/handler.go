@@ -155,7 +155,7 @@ func (s *Service) Resize(w http.ResponseWriter, r *http.Request) {
 
 		file, h, err := r.FormFile("file")
 		if err != nil {
-			return []byte(fmt.Sprintf("error decoding file %s into image: %v", h.Filename, err)),
+			return []byte(fmt.Sprintf("error decoding file into image: %v", err)),
 				http.StatusBadRequest
 		}
 		defer file.Close()
