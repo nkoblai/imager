@@ -463,3 +463,131 @@ func TestResize(t *testing.T) {
 		})
 	}
 }
+
+func TestOnlyResized(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	type tc struct {
+		name               string
+		getTest            func() *Service
+		expectedStatusCode int
+	}
+
+	tcs := []tc{
+		{
+			name: "http.StatusOK",
+			getTest: func() *Service {
+				imagesSvc := mock_model.NewMockImagesRepository(mockCtrl)
+				ctx := context.Background()
+				imagesSvc.EXPECT().OnlyResized(ctx).Return([]model.Image{}, nil)
+				return NewService(imagesSvc, nil, nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "http.StatusInternalServerError",
+			getTest: func() *Service {
+				imagesSvc := mock_model.NewMockImagesRepository(mockCtrl)
+				ctx := context.Background()
+				imagesSvc.EXPECT().OnlyResized(ctx).Return(nil, errors.New("error"))
+				return NewService(imagesSvc, nil, nil)
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			wr := httptest.NewRecorder()
+			url, err := url.Parse("http://images/resized")
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := &http.Request{URL: url}
+			tc.getTest().OnlyResized(wr, r)
+			statusCode := wr.Result().StatusCode
+			if statusCode != tc.expectedStatusCode {
+				t.Fatalf("expected status code is: %d but got: %d", tc.expectedStatusCode, statusCode)
+			}
+		})
+	}
+}
+
+func TestValidateSizeParams(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	type tc struct {
+		name        string
+		getTest     func() *http.Request
+		expectedErr bool
+	}
+
+	tcs := []tc{
+		{
+			name: "invalid height type",
+			getTest: func() *http.Request {
+				r, err := http.NewRequest("", "http://test?height=err&weight=1", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return r
+			},
+			expectedErr: true,
+		},
+		{
+			name: "invalid weight type",
+			getTest: func() *http.Request {
+				r, err := http.NewRequest("", "http://test?height=1&weight=err", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return r
+			},
+			expectedErr: true,
+		},
+		{
+			name: "invalid height value",
+			getTest: func() *http.Request {
+				r, err := http.NewRequest("", "http://test?height=0&weight=1", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return r
+			},
+			expectedErr: true,
+		},
+		{
+			name: "invalid weight value",
+			getTest: func() *http.Request {
+				r, err := http.NewRequest("", "http://test?height=1&weight=0", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return r
+			},
+			expectedErr: true,
+		},
+		{
+			name: "ok",
+			getTest: func() *http.Request {
+				r, err := http.NewRequest("", "http://test?height=1&weight=1", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return r
+			},
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			r := tc.getTest()
+			_, _, err := validateSizeParams(r)
+			if err == nil && tc.expectedErr {
+				t.Fatal("expected error got nil")
+			}
+		})
+	}
+}
