@@ -108,7 +108,7 @@ func readImage() ([]byte, error) {
 	return ioutil.ReadFile(testFilePath)
 }
 
-func resizeTestImage(w, h int, original []byte) (resizedImage []byte, err error) {
+func resizeImage(w, h int, original []byte) (resizedImage []byte, err error) {
 	img, err := imaging.Decode(bytes.NewReader(original))
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func TestResizeByID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resized, err := resizeTestImage(weight, height, original)
+	resized, err := resizeImage(weight, height, original)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestResizeByID(t *testing.T) {
 	}
 }
 
-func originalImageSize(b []byte) (int, int, error) {
+func originalImageResolution(b []byte) (int, int, error) {
 	img, err := imaging.Decode(bytes.NewReader(b))
 	if err != nil {
 		return 0, 0, err
@@ -308,12 +308,12 @@ func TestResize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	originalImageW, originalImageH, err := originalImageSize(original)
+	originalImageW, originalImageH, err := originalImageResolution(original)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	resized, err := resizeTestImage(weight, height, original)
+	resized, err := resizeImage(weight, height, original)
 	if err != nil {
 		t.Fatal(err)
 	}

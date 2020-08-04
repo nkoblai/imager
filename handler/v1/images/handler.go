@@ -174,7 +174,6 @@ func (s *Service) Resize(w http.ResponseWriter, r *http.Request) {
 
 		originalImageResolution := fmt.Sprintf("%dx%d", img.Bounds().Dx(), img.Bounds().Dy())
 
-		// TODO: resize image using query vars
 		img = imaging.Resize(img, weight, height, imaging.NearestNeighbor)
 		if img == nil {
 			return []byte(fmt.Sprintf("couldn't resize image '%s'", h.Filename)),
