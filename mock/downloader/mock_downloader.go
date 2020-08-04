@@ -6,7 +6,6 @@ package mock_downloader
 
 import (
 	context "context"
-	io "io"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -36,10 +35,10 @@ func (m *MockService) EXPECT() *MockServiceMockRecorder {
 }
 
 // Download mocks base method.
-func (m *MockService) Download(arg0 context.Context, arg1 string) (io.Reader, error) {
+func (m *MockService) Download(arg0 context.Context, arg1 string) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Download", arg0, arg1)
-	ret0, _ := ret[0].(io.Reader)
+	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

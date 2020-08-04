@@ -77,19 +77,13 @@ func (s *Service) ResizeByID(w http.ResponseWriter, r *http.Request) {
 
 		originalImageName := path.Base(originalImage.DownloadURL)
 
-		body, err := s.downloader.Download(ctx, originalImage.DownloadURL)
+		oldImgBytes, err := s.downloader.Download(ctx, originalImage.DownloadURL)
 		if err != nil {
 			return []byte(fmt.Sprintf("couldn't download image by url: %s with error: %v", originalImageName, err)),
 				http.StatusInternalServerError
 		}
 
 		newImageResolution := fmt.Sprintf("%dx%d", weight, height)
-
-		oldImgBytes, err := ioutil.ReadAll(body)
-		if err != nil {
-			return []byte(fmt.Sprintf("error reading file %s with error: %v", originalImageName, err)),
-				http.StatusBadRequest
-		}
 
 		img, err := imaging.Decode(bytes.NewReader(oldImgBytes))
 		if err != nil {
