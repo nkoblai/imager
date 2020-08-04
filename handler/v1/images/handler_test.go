@@ -85,15 +85,11 @@ func createRecorderAndRequest(id string, w, h int) (*http.Request, *httptest.Res
 	return r, wr, nil
 }
 
-func writeMultipartData(r *http.Request) (*http.Request, error) {
+func writeMultipartData(r *http.Request, b []byte) (*http.Request, error) {
 	body := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(body)
 	defer multipartWriter.Close()
 	w, err := multipartWriter.CreateFormFile("file", "test.jpg")
-	if err != nil {
-		return nil, err
-	}
-	b, err := ioutil.ReadFile(testFilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -112,21 +108,17 @@ func readImage() ([]byte, error) {
 	return ioutil.ReadFile(testFilePath)
 }
 
-func resizeTestImage(w, h int) (originalImage []byte, resizedImage []byte, err error) {
-	b, err := ioutil.ReadFile(testFilePath)
+func resizeTestImage(w, h int, original []byte) (resizedImage []byte, err error) {
+	img, err := imaging.Decode(bytes.NewReader(original))
 	if err != nil {
-		return nil, nil, err
-	}
-	img, err := imaging.Decode(bytes.NewReader(b))
-	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	img = imaging.Resize(img, w, h, imaging.NearestNeighbor)
 	buf := new(bytes.Buffer)
 	if err := imaging.Encode(buf, img, imgFormat); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return b, buf.Bytes(), nil
+	return buf.Bytes(), nil
 }
 
 func TestResizeByID(t *testing.T) {
@@ -142,7 +134,12 @@ func TestResizeByID(t *testing.T) {
 
 	weight, height := 100, 100
 
-	original, resized, err := resizeTestImage(weight, height)
+	original, err := readImage()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resized, err := resizeTestImage(weight, height, original)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,6 +282,15 @@ func TestResizeByID(t *testing.T) {
 	}
 }
 
+func originalImageSize(b []byte) (int, int, error) {
+	img, err := imaging.Decode(bytes.NewReader(b))
+	if err != nil {
+		return 0, 0, err
+	}
+	g := img.Bounds()
+	return g.Dx(), g.Dy(), nil
+}
+
 func TestResize(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -297,14 +303,26 @@ func TestResize(t *testing.T) {
 
 	weight, height := 100, 100
 
-	original, resized, err := resizeTestImage(weight, height)
+	original, err := readImage()
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	originalImageW, originalImageH, err := originalImageSize(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resized, err := resizeTestImage(weight, height, original)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	hashOriginal, err := calculateMD5(bytes.NewBuffer(original))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	hashResized, err := calculateMD5(bytes.NewBuffer(resized))
 	if err != nil {
 		t.Fatal(err)
@@ -340,7 +358,7 @@ func TestResize(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				r, err = writeMultipartData(r)
+				r, err = writeMultipartData(r, original)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -359,7 +377,7 @@ func TestResize(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				r, err = writeMultipartData(r)
+				r, err = writeMultipartData(r, original)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -369,6 +387,68 @@ func TestResize(t *testing.T) {
 				return NewService(nil, uploadSvc, nil), r, wr
 			},
 			expectedStatusCode: http.StatusInternalServerError,
+		},
+		{
+			name: "http.StatusInternalServerError: error saving original image",
+			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
+				r, wr, err := createRecorderAndRequest("1", weight, height)
+				if err != nil {
+					t.Fatal(err)
+				}
+				r, err = writeMultipartData(r, original)
+				if err != nil {
+					t.Fatal(err)
+				}
+				uploadSvc := mock_uploader.NewMockService(mockCtrl)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashOriginal), bytes.NewBuffer(original)).Return("", nil)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashResized), bytes.NewBuffer(resized)).Return("", nil)
+				imageSvc := mock_model.NewMockImagesRepository(mockCtrl)
+				imageSvc.EXPECT().Save(r.Context(), model.Image{Resolution: fmt.Sprintf("%dx%d", originalImageW, originalImageH)}).Return(0, errors.New("error"))
+				return NewService(imageSvc, uploadSvc, nil), r, wr
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+		{
+			name: "http.StatusInternalServerError: error saving resized image",
+			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
+				r, wr, err := createRecorderAndRequest("1", weight, height)
+				if err != nil {
+					t.Fatal(err)
+				}
+				r, err = writeMultipartData(r, original)
+				if err != nil {
+					t.Fatal(err)
+				}
+				uploadSvc := mock_uploader.NewMockService(mockCtrl)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashOriginal), bytes.NewBuffer(original)).Return("", nil)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashResized), bytes.NewBuffer(resized)).Return("", nil)
+				imageSvc := mock_model.NewMockImagesRepository(mockCtrl)
+				imageSvc.EXPECT().Save(r.Context(), model.Image{Resolution: fmt.Sprintf("%dx%d", originalImageW, originalImageH)}).Return(1, nil)
+				imageSvc.EXPECT().Save(r.Context(), model.Image{OriginalID: 1, Resolution: fmt.Sprintf("%dx%d", weight, height)}).Return(0, errors.New("error"))
+				return NewService(imageSvc, uploadSvc, nil), r, wr
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+		{
+			name: "http.StatusCreated",
+			getTest: func() (*Service, *http.Request, *httptest.ResponseRecorder) {
+				r, wr, err := createRecorderAndRequest("1", weight, height)
+				if err != nil {
+					t.Fatal(err)
+				}
+				r, err = writeMultipartData(r, original)
+				if err != nil {
+					t.Fatal(err)
+				}
+				uploadSvc := mock_uploader.NewMockService(mockCtrl)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashOriginal), bytes.NewBuffer(original)).Return("", nil)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashResized), bytes.NewBuffer(resized)).Return("", nil)
+				imageSvc := mock_model.NewMockImagesRepository(mockCtrl)
+				imageSvc.EXPECT().Save(r.Context(), model.Image{Resolution: fmt.Sprintf("%dx%d", originalImageW, originalImageH)}).Return(1, nil)
+				imageSvc.EXPECT().Save(r.Context(), model.Image{OriginalID: 1, Resolution: fmt.Sprintf("%dx%d", weight, height)}).Return(2, nil)
+				return NewService(imageSvc, uploadSvc, nil), r, wr
+			},
+			expectedStatusCode: http.StatusCreated,
 		},
 	}
 

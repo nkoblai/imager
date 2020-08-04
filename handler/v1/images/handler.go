@@ -321,11 +321,11 @@ func validateSizeParams(r *http.Request) (int, int, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("invalid height param")
 	}
-	if w <= 0 || w > 3840 {
-		return 0, 0, fmt.Errorf("weight is not in range [0-3840]")
+	if w <= 0 {
+		return 0, 0, fmt.Errorf("weight is lower or equal 0")
 	}
-	if h <= 0 || w > 2160 {
-		return 0, 0, fmt.Errorf("height is not in range [0-2160]")
+	if h <= 0 {
+		return 0, 0, fmt.Errorf("height is lower or equal 0")
 	}
 	return w, h, nil
 }
