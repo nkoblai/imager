@@ -32,6 +32,7 @@ func (s *impl) Download(ctx context.Context, url string) (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("error downloading %s, status code is: %d", url, res.StatusCode)

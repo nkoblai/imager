@@ -72,7 +72,7 @@ func (s *Service) ResizeByID(w http.ResponseWriter, r *http.Request) {
 		originalImage, err := s.repo.GetOne(ctx, id)
 		if err != nil {
 			return []byte(fmt.Sprintf("couldn't get image by id: %d with error: %v", id, err)),
-				http.StatusBadRequest
+				http.StatusInternalServerError
 		}
 
 		originalImageName := path.Base(originalImage.DownloadURL)
@@ -109,7 +109,7 @@ func (s *Service) ResizeByID(w http.ResponseWriter, r *http.Request) {
 				http.StatusInternalServerError
 		}
 
-		hash, err := calcualteMD5(bytes.NewBuffer(buf.Bytes()))
+		hash, err := calculateMD5(bytes.NewBuffer(buf.Bytes()))
 		if err != nil {
 			return []byte(fmt.Sprintf("error calculating md5 for image %v", err)),
 				http.StatusInternalServerError
@@ -231,7 +231,7 @@ func (s *Service) Resize(w http.ResponseWriter, r *http.Request) {
 	response(w, data, statusCode)
 }
 
-func calcualteMD5(r io.Reader) (string, error) {
+func calculateMD5(r io.Reader) (string, error) {
 	h := md5.New()
 	if _, err := io.Copy(h, r); err != nil {
 		if err != nil {
@@ -253,7 +253,7 @@ func (s *Service) uploadImages(ctx context.Context, images [2][]byte) (model.Ori
 
 	go func() {
 		defer wg.Done()
-		hash, err := calcualteMD5(bytes.NewBuffer(images[0]))
+		hash, err := calculateMD5(bytes.NewBuffer(images[0]))
 		if err != nil {
 			errCh <- err
 			return
@@ -268,7 +268,7 @@ func (s *Service) uploadImages(ctx context.Context, images [2][]byte) (model.Ori
 
 	go func() {
 		defer wg.Done()
-		hash, err := calcualteMD5(bytes.NewBuffer(images[1]))
+		hash, err := calculateMD5(bytes.NewBuffer(images[1]))
 		if err != nil {
 			errCh <- err
 			return
@@ -330,7 +330,6 @@ func validateSizeParams(r *http.Request) (int, int, error) {
 	if w <= 0 || w > 3840 {
 		return 0, 0, fmt.Errorf("weight is not in range [0-3840]")
 	}
-
 	if h <= 0 || w > 2160 {
 		return 0, 0, fmt.Errorf("height is not in range [0-2160]")
 	}
