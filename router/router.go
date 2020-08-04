@@ -8,6 +8,7 @@ import (
 	"github.com/imager/web/uploader"
 )
 
+// New returns new router.
 func New(imgRepo model.ImagesRepository, uploadSvc uploader.Service, downloadSvc downloader.Service) *mux.Router {
 	router := mux.NewRouter()
 	imgSvcV1 := handler.NewService(imgRepo, uploadSvc, downloadSvc)

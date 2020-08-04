@@ -24,16 +24,19 @@ import (
 
 const imgFormat = imaging.PNG
 
+// Service represents handler service.
 type Service struct {
 	repo       model.ImagesRepository
 	uploader   uploader.Service
 	downloader downloader.Service
 }
 
+// NewService returns new handler service.
 func NewService(repo model.ImagesRepository, uploader uploader.Service, downloader downloader.Service) *Service {
 	return &Service{repo: repo, uploader: uploader, downloader: downloader}
 }
 
+// All returns all images.
 func (s *Service) All(w http.ResponseWriter, r *http.Request) {
 	data, statusCode := func() ([]byte, int) {
 		ctx := r.Context()
@@ -52,6 +55,7 @@ func (s *Service) All(w http.ResponseWriter, r *http.Request) {
 	response(w, data, statusCode)
 }
 
+// ResizeByID uses for changing existing image.
 func (s *Service) ResizeByID(w http.ResponseWriter, r *http.Request) {
 	data, statusCode := func(w http.ResponseWriter, r *http.Request) ([]byte, int) {
 		ctx := r.Context()
@@ -145,6 +149,7 @@ func (s *Service) ResizeByID(w http.ResponseWriter, r *http.Request) {
 	response(w, data, statusCode)
 }
 
+// Resize creates and resizes image.
 func (s *Service) Resize(w http.ResponseWriter, r *http.Request) {
 	data, statusCode := func(w http.ResponseWriter, r *http.Request) ([]byte, int) {
 		ctx := r.Context()
@@ -288,6 +293,7 @@ func (s *Service) uploadImages(ctx context.Context, images [2][]byte) (model.Ori
 	return res, nil
 }
 
+// OnlyResized returns only resized images.
 func (s *Service) OnlyResized(w http.ResponseWriter, r *http.Request) {
 	data, statusCode := func() ([]byte, int) {
 		ctx := r.Context()

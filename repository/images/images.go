@@ -24,14 +24,17 @@ const (
 	insertImageWithoutReferenceQuery = "INSERT INTO images (download_url, resolution) VALUES ($1, $2) RETURNING id"
 )
 
+// Repo contains db session.
 type Repo struct {
 	db *sql.DB
 }
 
+// NewRepo creates new Repo struct with db session.
 func NewRepo(db *sql.DB) *Repo {
 	return &Repo{db}
 }
 
+// Save inserts new image with or without reference.
 func (r *Repo) Save(ctx context.Context, img model.Image) (int, error) {
 	const errMsg = "inserting of '%v' to db failed with error: %v"
 	var id int
@@ -47,6 +50,7 @@ func (r *Repo) Save(ctx context.Context, img model.Image) (int, error) {
 	return id, nil
 }
 
+// All returns all images.
 func (r *Repo) All(ctx context.Context) ([]model.OriginalResized, error) {
 	const errMsg = "error getting all images from DB: %v"
 	rows, err := r.db.QueryContext(ctx, allImagesQuery)
@@ -73,6 +77,7 @@ func (r *Repo) All(ctx context.Context) ([]model.OriginalResized, error) {
 	return res, nil
 }
 
+// OnlyResized returns only resized images.
 func (r *Repo) OnlyResized(ctx context.Context) ([]model.Image, error) {
 	const errMsg = "error getting only resized images from DB: %v"
 	rows, err := r.db.QueryContext(ctx, onlyResizedImagesQuery)
@@ -96,6 +101,7 @@ func (r *Repo) OnlyResized(ctx context.Context) ([]model.Image, error) {
 	return res, nil
 }
 
+// GetOne returns specific image by it's ID.
 func (r *Repo) GetOne(ctx context.Context, id int) (model.Image, error) {
 	var image model.Image
 	if err := r.db.QueryRowContext(ctx, oneByID, id).Scan(&image.ID, &image.DownloadURL, &image.Resolution); err != nil {

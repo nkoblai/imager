@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
+// Service describes uploader interface.
 type Service interface {
 	Upload(context.Context, string, io.Reader) (string, error)
 }
@@ -16,13 +17,13 @@ type impl struct {
 	s3manager *s3manager.Uploader
 }
 
+// New returns uploader implementation using s3 manager.
 func New(s3manager *s3manager.Uploader) Service {
 	return &impl{s3manager}
 }
 
+// Upload uploads image to s3 bucket and returns link for download.
 func (s *impl) Upload(ctx context.Context, fileName string, r io.Reader) (string, error) {
-
-	// TODO: add possibility to create new bucket if such doesn't exist
 
 	var (
 		bucketName = "try-imager"
