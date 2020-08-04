@@ -112,7 +112,7 @@ func readImage() ([]byte, error) {
 	return ioutil.ReadFile(testFilePath)
 }
 
-func resizeTestImage(w, h int) (originalImage []byte, resizedImage *bytes.Buffer, err error) {
+func resizeTestImage(w, h int) (originalImage []byte, resizedImage []byte, err error) {
 	b, err := ioutil.ReadFile(testFilePath)
 	if err != nil {
 		return nil, nil, err
@@ -126,7 +126,7 @@ func resizeTestImage(w, h int) (originalImage []byte, resizedImage *bytes.Buffer
 	if err := imaging.Encode(buf, img, imgFormat); err != nil {
 		return nil, nil, err
 	}
-	return b, buf, nil
+	return b, buf.Bytes(), nil
 }
 
 func TestResizeByID(t *testing.T) {
@@ -142,12 +142,12 @@ func TestResizeByID(t *testing.T) {
 
 	weight, height := 100, 100
 
-	b, buf, err := resizeTestImage(weight, height)
+	original, resized, err := resizeTestImage(weight, height)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	hash, err := calculateMD5(bytes.NewReader(buf.Bytes()))
+	hash, err := calculateMD5(bytes.NewReader(resized))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,9 +228,9 @@ func TestResizeByID(t *testing.T) {
 				imagesSvc := mock_model.NewMockImagesRepository(mockCtrl)
 				imagesSvc.EXPECT().GetOne(r.Context(), 1).Return(model.Image{}, nil)
 				downloadSvc := mock_downloader.NewMockService(mockCtrl)
-				downloadSvc.EXPECT().Download(r.Context(), "").Return(b, nil)
+				downloadSvc.EXPECT().Download(r.Context(), "").Return(original, nil)
 				uploadSvc := mock_uploader.NewMockService(mockCtrl)
-				uploadSvc.EXPECT().Upload(r.Context(), name(hash), buf).Return("", errors.New("error"))
+				uploadSvc.EXPECT().Upload(r.Context(), name(hash), bytes.NewBuffer(resized)).Return("", errors.New("error"))
 				return NewService(imagesSvc, uploadSvc, downloadSvc), r, wr
 			},
 			expectedStatusCode: http.StatusInternalServerError,
@@ -245,9 +245,9 @@ func TestResizeByID(t *testing.T) {
 				imagesSvc := mock_model.NewMockImagesRepository(mockCtrl)
 				imagesSvc.EXPECT().GetOne(r.Context(), 1).Return(model.Image{}, nil)
 				downloadSvc := mock_downloader.NewMockService(mockCtrl)
-				downloadSvc.EXPECT().Download(r.Context(), "").Return(b, nil)
+				downloadSvc.EXPECT().Download(r.Context(), "").Return(original, nil)
 				uploadSvc := mock_uploader.NewMockService(mockCtrl)
-				uploadSvc.EXPECT().Upload(r.Context(), name(hash), buf).Return("", nil)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hash), bytes.NewBuffer(resized)).Return("", nil)
 				imagesSvc.EXPECT().Save(r.Context(), model.Image{Resolution: fmt.Sprintf("%dx%d", weight, height)}).Return(0, errors.New("error"))
 				return NewService(imagesSvc, uploadSvc, downloadSvc), r, wr
 			},
@@ -263,9 +263,9 @@ func TestResizeByID(t *testing.T) {
 				imagesSvc := mock_model.NewMockImagesRepository(mockCtrl)
 				imagesSvc.EXPECT().GetOne(r.Context(), 1).Return(model.Image{}, nil)
 				downloadSvc := mock_downloader.NewMockService(mockCtrl)
-				downloadSvc.EXPECT().Download(r.Context(), "").Return(b, nil)
+				downloadSvc.EXPECT().Download(r.Context(), "").Return(original, nil)
 				uploadSvc := mock_uploader.NewMockService(mockCtrl)
-				uploadSvc.EXPECT().Upload(r.Context(), name(hash), buf).Return("", nil)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hash), bytes.NewBuffer(resized)).Return("", nil)
 				imagesSvc.EXPECT().Save(r.Context(), model.Image{Resolution: fmt.Sprintf("%dx%d", weight, height)}).Return(1, nil)
 				return NewService(imagesSvc, uploadSvc, downloadSvc), r, wr
 			},
@@ -305,7 +305,7 @@ func TestResize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hashResized, err := calculateMD5(bytes.NewBuffer(resized.Bytes()))
+	hashResized, err := calculateMD5(bytes.NewBuffer(resized))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestResize(t *testing.T) {
 
 				uploadSvc := mock_uploader.NewMockService(mockCtrl)
 				uploadSvc.EXPECT().Upload(r.Context(), name(hashOriginal), bytes.NewBuffer(original)).Return("", errors.New("error"))
-				uploadSvc.EXPECT().Upload(r.Context(), name(hashResized), bytes.NewBuffer(resized.Bytes())).Return("", nil)
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashResized), bytes.NewBuffer(resized)).Return("", nil)
 				return NewService(nil, uploadSvc, nil), r, wr
 			},
 			expectedStatusCode: http.StatusInternalServerError,
@@ -365,7 +365,7 @@ func TestResize(t *testing.T) {
 				}
 				uploadSvc := mock_uploader.NewMockService(mockCtrl)
 				uploadSvc.EXPECT().Upload(r.Context(), name(hashOriginal), bytes.NewBuffer(original)).Return("", nil)
-				uploadSvc.EXPECT().Upload(r.Context(), name(hashResized), bytes.NewBuffer(resized.Bytes())).Return("", errors.New("error"))
+				uploadSvc.EXPECT().Upload(r.Context(), name(hashResized), bytes.NewBuffer(resized)).Return("", errors.New("error"))
 				return NewService(nil, uploadSvc, nil), r, wr
 			},
 			expectedStatusCode: http.StatusInternalServerError,
