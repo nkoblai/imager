@@ -59,7 +59,7 @@ func (r *Repo) All(ctx context.Context) ([]model.OriginalResized, error) {
 	}
 	defer rows.Close()
 
-	var res []model.OriginalResized
+	res := []model.OriginalResized{}
 	for rows.Next() {
 		var originalResized model.OriginalResized
 		if err := rows.Scan(
@@ -86,7 +86,7 @@ func (r *Repo) OnlyResized(ctx context.Context) ([]model.Image, error) {
 	}
 	defer rows.Close()
 
-	var res []model.Image
+	res := []model.Image{}
 	for rows.Next() {
 		var image model.Image
 		if err := rows.Scan(
