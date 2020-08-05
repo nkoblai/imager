@@ -1,0 +1,6 @@
+CREATE TABLE images (
+    id              SERIAL PRIMARY KEY,
+    download_url    VARCHAR(255) NOT NULL,          
+    resolution      VARCHAR(50) NOT NULL,           
+    original_id     INT REFERENCES images(id)
+);

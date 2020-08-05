@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/imager/model"
+	"github.com/imager/src/model"
 )
 
 const (

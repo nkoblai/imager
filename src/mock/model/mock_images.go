@@ -9,7 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	model "github.com/imager/model"
+	model "github.com/imager/src/model"
 )
 
 // MockImagesRepository is a mock of ImagesRepository interface.

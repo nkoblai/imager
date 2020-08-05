@@ -1,0 +1,33 @@
+version: '3'
+services:
+  migrate:
+    image: migrate/migrate
+    volumes:
+        - ./migrations:/migrations
+    command: ["-path", "/migrations", "-database",  "postgres://postgres:${PGPORT}/${PGDBNAME}?user=${PGUSER}&password=${PGPASSWORD}&sslmode=disable", "up"]
+    links: 
+      - postgres
+  imager:
+    build: ../.
+    environment: 
+        - PGDBNAME=${PGDBNAME}
+        - PGUSER=${PGUSER}
+        - PGPASSWORD=${PGPASSWORD}
+        - PGHOST=postgres
+        - PGPORT=${PGPORT}
+    ports:
+      - "8080:8080"
+    links: 
+      - migrate
+      - postgres
+  postgres:
+    image: "postgres"
+    restart: always
+    environment: 
+        - POSTGRES_DB=${PGDBNAME}
+        - POSTGRES_USER=${PGUSER}
+        - POSTGRES_PASSWORD=${PGPASSWORD}
+    volumes:
+        - pgdbdata:/var/lib/postgresql/data
+volumes:
+    pgdbdata:

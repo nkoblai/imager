@@ -15,16 +15,15 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
-	mock_downloader "github.com/imager/mock/downloader"
-	mock_model "github.com/imager/mock/model"
-	mock_uploader "github.com/imager/mock/uploader"
-	"github.com/imager/model"
+	mock_downloader "github.com/imager/src/mock/downloader"
+	mock_model "github.com/imager/src/mock/model"
+	mock_uploader "github.com/imager/src/mock/uploader"
+	"github.com/imager/src/model"
 )
 
 const testFilePath = "./testdata/test.jpg"
 
 func TestAll(t *testing.T) {
-
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -122,7 +121,6 @@ func resizeImage(w, h int, original []byte) (resizedImage []byte, err error) {
 }
 
 func TestResizeByID(t *testing.T) {
-
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 

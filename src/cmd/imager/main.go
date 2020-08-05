@@ -11,10 +11,11 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/imager/repository/images"
-	"github.com/imager/router"
-	"github.com/imager/web/downloader"
-	"github.com/imager/web/uploader"
+
+	"github.com/imager/src/repository/images"
+	"github.com/imager/src/router"
+	"github.com/imager/src/web/downloader"
+	"github.com/imager/src/web/uploader"
 )
 
 func main() {

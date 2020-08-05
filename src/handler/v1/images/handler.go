@@ -15,9 +15,9 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
-	"github.com/imager/model"
-	"github.com/imager/web/downloader"
-	"github.com/imager/web/uploader"
+	"github.com/imager/src/model"
+	"github.com/imager/src/web/downloader"
+	"github.com/imager/src/web/uploader"
 
 	"github.com/disintegration/imaging"
 )

@@ -2,10 +2,10 @@ package router
 
 import (
 	"github.com/gorilla/mux"
-	handler "github.com/imager/handler/v1/images"
-	"github.com/imager/model"
-	"github.com/imager/web/downloader"
-	"github.com/imager/web/uploader"
+	handler "github.com/imager/src/handler/v1/images"
+	"github.com/imager/src/model"
+	"github.com/imager/src/web/downloader"
+	"github.com/imager/src/web/uploader"
 )
 
 // New returns new router.
