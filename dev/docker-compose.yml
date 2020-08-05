@@ -2,10 +2,11 @@ version: '3'
 services:
   migrate:
     image: migrate/migrate
+    restart: on-failure:5
     volumes:
         - ./migrations:/migrations
     command: ["-path", "/migrations", "-database",  "postgres://postgres:${PGPORT}/${PGDBNAME}?user=${PGUSER}&password=${PGPASSWORD}&sslmode=disable", "up"]
-    links: 
+    depends_on: 
       - postgres
   imager:
     build: ../.
@@ -17,8 +18,7 @@ services:
         - PGPORT=${PGPORT}
     ports:
       - "8080:8080"
-    links: 
-      - migrate
+    depends_on: 
       - postgres
   postgres:
     image: "postgres"
