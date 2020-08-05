@@ -11,11 +11,14 @@ services:
   imager:
     build: ../.
     environment: 
+        - AWS_SDK_LOAD_CONFIG=true
         - PGDBNAME=${PGDBNAME}
         - PGUSER=${PGUSER}
         - PGPASSWORD=${PGPASSWORD}
         - PGHOST=postgres
         - PGPORT=${PGPORT}
+    volumes: 
+      - ~/.aws:/root/.aws
     ports:
       - "8080:8080"
     depends_on: 
