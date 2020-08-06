@@ -12,6 +12,7 @@ services:
     build: ../.
     environment: 
         - AWS_SDK_LOAD_CONFIG=true
+        - BUCKETNAME=${BUCKETNAME}
         - PGDBNAME=${PGDBNAME}
         - PGUSER=${PGUSER}
         - PGPASSWORD=${PGPASSWORD}

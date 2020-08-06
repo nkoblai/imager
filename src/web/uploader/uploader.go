@@ -14,24 +14,24 @@ type Service interface {
 }
 
 type impl struct {
-	s3manager *s3manager.Uploader
+	s3manager  *s3manager.Uploader
+	bucketName *string
 }
 
 // New returns uploader implementation using s3 manager.
-func New(s3manager *s3manager.Uploader) Service {
-	return &impl{s3manager}
+func New(s3manager *s3manager.Uploader, bucketName *string) Service {
+	return &impl{s3manager, bucketName}
 }
 
 // Upload uploads image to s3 bucket and returns link for download.
 func (s *impl) Upload(ctx context.Context, fileName string, r io.Reader) (string, error) {
 
 	var (
-		bucketName = "try-imager"
-		aclPerm    = "public-read"
+		aclPerm = "public-read"
 	)
 
 	result, err := s.s3manager.UploadWithContext(ctx, &s3manager.UploadInput{
-		Bucket: &bucketName,
+		Bucket: s.bucketName,
 		Key:    &fileName,
 		Body:   r,
 		ACL:    &aclPerm,
